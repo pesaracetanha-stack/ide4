@@ -1,16 +1,74 @@
 # -*- coding: utf-8 -*-
 # codesaver/widgets/ai_tools/worker.py
-import openai
-import json
+import httpx
 import os
 import re
+import time
 from PySide6.QtCore import QThread, Signal
+
+DEFAULT_BASE_URL = "https://api.openai.com/v1"
+DEFAULT_TIMEOUT = 30.0
+MAX_HTTP_RETRIES = 2
+RETRY_BACKOFF_SECONDS = 1.0
+
+
+def chat_completions(base_url, api_key, model, messages, timeout=DEFAULT_TIMEOUT):
+    """Call an OpenAI-compatible chat/completions endpoint via httpx.
+
+    Minimal vendor-neutral replacement for the openai SDK
+    (see docs/decisions/0000-initial-decisions.md, Decision 4).
+    Will migrate into the Phase D core/ai/ ModelAdapter.
+
+    Args:
+        base_url: API root, e.g. "https://api.openai.com/v1". Falls back
+            to DEFAULT_BASE_URL when empty (matches the old SDK default).
+        api_key: Bearer token.
+        model: Model identifier, e.g. "gpt-4o-mini".
+        messages: OpenAI chat messages list.
+        timeout: Per-request timeout in seconds.
+
+    Returns:
+        The assistant message content string ("" if the API returned none).
+
+    Raises:
+        httpx.HTTPStatusError: on non-retryable HTTP error status.
+        httpx.TimeoutException: on timeout.
+        httpx.TransportError: on connection failure.
+        ValueError: on a malformed (choices-less) response body.
+    """
+    url = (base_url or DEFAULT_BASE_URL).rstrip("/") + "/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {"model": model, "messages": messages}
+    # Connection-level retries (connect phase only), mirroring the old
+    # SDK's max_retries=2 behavior.
+    transport = httpx.HTTPTransport(retries=2)
+
+    with httpx.Client(timeout=timeout, transport=transport) as client:
+        for attempt in range(MAX_HTTP_RETRIES + 1):
+            response = client.post(url, json=payload, headers=headers)
+            # Retry transient failures (429 / 5xx) with a short backoff.
+            if (response.status_code == 429 or response.status_code >= 500) and attempt < MAX_HTTP_RETRIES:
+                time.sleep(RETRY_BACKOFF_SECONDS)
+                continue
+            response.raise_for_status()
+            data = response.json()
+            choices = data.get("choices") or []
+            if not choices or "message" not in choices[0]:
+                raise ValueError(
+                    "Malformed API response: missing choices[0].message: "
+                    + str(data)[:200]
+                )
+            return choices[0]["message"].get("content") or ""
+
 
 class ApiWorker(QThread):
     response_received = Signal(str)
     error_occurred = Signal(str)
-    status_update = Signal(str)            
-    auto_inject_requested = Signal(str, str) 
+    status_update = Signal(str)
+    auto_inject_requested = Signal(str, str)
     finished_task = Signal()
 
     def __init__(self, api_settings, prompt, project_root, tree_context, active_file_name="", active_file_content="", images=None):
@@ -26,7 +84,7 @@ class ApiWorker(QThread):
         self.images = images or []
 
     def read_local_file(self, file_path):
-        if not self.project_root: 
+        if not self.project_root:
             return "Error: No project open."
         abs_path = os.path.join(self.project_root, file_path)
         try:
@@ -40,20 +98,13 @@ class ApiWorker(QThread):
             self.error_occurred.emit("Authentication Error: API key is not set. Please go to AI Settings.")
             self.finished_task.emit()
             return
-            
+
         try:
             # 🚀 FIX 1: Network Resilience (Timeouts & Auto-Retries)
-            client_kwargs = {
-                "api_key": self.api_key,
-                "timeout": 30.0,      # حداکثر ۳۰ ثانیه انتظار برای جواب
-                "max_retries": 2      # در صورت قطعی لحظه‌ای، ۲ بار به صورت خودکار تلاش مجدد می‌کند
-            }
-            if self.base_url:
-                client_kwargs["base_url"] = self.base_url
-            
-            client = openai.OpenAI(**client_kwargs)
+            # Handled inside chat_completions(): 30s timeout, 2 connection
+            # retries plus a 429/5xx retry loop with 1s backoff.
             bt = chr(96) * 3
-            
+
             sys_prompt = (
                 "You are an expert AI Developer Assistant integrated directly into an IDE.\n"
                 "CRITICAL RULES:\n"
@@ -65,7 +116,7 @@ class ApiWorker(QThread):
                 + bt + "python\n# FILE: path/to/file.py\n...code...\n" + bt + "\n"
                 "Project Context:\n" + str(self.tree_context)
             )
-            
+
             if self.active_file_name and self.active_file_content:
                 sys_prompt += (
                     f"\n\n[USER CURRENTLY OPEN FILE: {self.active_file_name}]\n"
@@ -75,10 +126,10 @@ class ApiWorker(QThread):
             user_content = []
             if self.prompt:
                 user_content.append({"type": "text", "text": self.prompt})
-                
+
             for img_base64 in self.images:
                 user_content.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_base64}"}})
-                
+
             if not self.prompt and self.images:
                 user_content.append({"type": "text", "text": "Please analyze this image."})
 
@@ -89,43 +140,40 @@ class ApiWorker(QThread):
 
             # 🚀 FIX 2: Prevent AI Infinite Loops
             seen_files = set()
-            max_read_attempts = 3 
+            max_read_attempts = 3
 
             for attempt in range(max_read_attempts):
                 self.status_update.emit(f"Thinking... (Step {attempt + 1})")
-                
-                response = client.chat.completions.create(
-                    model=self.model_name,
-                    messages=messages
-                )
 
-                final_text = response.choices[0].message.content or ""
+                final_text = chat_completions(
+                    self.base_url, self.api_key, self.model_name, messages
+                )
                 messages.append({"role": "assistant", "content": final_text})
-                
+
                 # Check for READ_FILE request
                 read_match = re.search(r'READ_FILE:\s*([a-zA-Z0-9_/\.\-]+)', final_text)
                 if read_match:
                     filepath = read_match.group(1).strip()
-                    
+
                     # Prevent AI from reading the exact same file in a loop
                     if filepath in seen_files:
                         self.status_update.emit(f"AI requested {filepath} again. Forcing stop to save tokens.")
                         break
-                        
+
                     seen_files.add(filepath)
                     self.status_update.emit("Reading local file: " + filepath)
                     content = self.read_local_file(filepath)
-                    
+
                     messages.append({
-                        "role": "user", 
+                        "role": "user",
                         "content": f"Content of {filepath}:\n" + bt + "\n" + content + "\n" + bt + "\nNow continue."
                     })
-                    continue 
-                
+                    continue
+
                 # Check for code injection blocks
                 pattern = r"" + bt + r"(?:[a-zA-Z0-9\-\+]+)?\n(.*?)" + bt
                 blocks = re.findall(pattern, final_text, flags=re.DOTALL)
-                
+
                 for block in blocks:
                     block = block.strip()
                     lines = block.split('\n')
@@ -141,13 +189,19 @@ class ApiWorker(QThread):
                 break
 
         # 🚀 FIX 3: Granular Error Handling
-        except openai.AuthenticationError:
-            self.error_occurred.emit("🔑 Authentication Error: Your API Key is invalid or expired.")
-        except openai.RateLimitError:
-            self.error_occurred.emit("⏱️ Rate Limit Exceeded: Please wait a few moments and try again.")
-        except openai.APITimeoutError:
+        # Note: TimeoutException must be caught before TransportError
+        # (it is a TransportError subclass).
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            if status in (401, 403):
+                self.error_occurred.emit("🔑 Authentication Error: Your API Key is invalid or expired.")
+            elif status == 429:
+                self.error_occurred.emit("⏱️ Rate Limit Exceeded: Please wait a few moments and try again.")
+            else:
+                self.error_occurred.emit(f"⚠️ Unexpected Error: HTTP {status} - {e.response.text[:200]}")
+        except httpx.TimeoutException:
             self.error_occurred.emit("🌐 Connection Timeout: The AI server took too long to respond. Check your network/proxy.")
-        except openai.APIConnectionError:
+        except httpx.TransportError:
             self.error_occurred.emit("🔌 Connection Error: Could not reach the AI server. Are you connected to the internet?")
         except Exception as e:
             self.error_occurred.emit(f"⚠️ Unexpected Error: {str(e)}")

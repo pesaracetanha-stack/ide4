@@ -30,7 +30,7 @@ hidden_modules = [
     'PySide6.QtSvg',
     'PySide6.QtSvgWidgets',
     'jedi',
-    'openai',
+    'httpx',
     'sqlite3'
 ] + we_hiddenimports
 

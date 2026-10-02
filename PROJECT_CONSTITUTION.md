@@ -1,10 +1,3 @@
-# 📄 فایل نهایی — آماده برای قرار دادن در ریشه‌ی مخزن
-
-**نام فایل:** `PROJECT_CONSTITUTION.md`
-**محل قرارگیری:** ریشه‌ی مخزن — [github.com/pesaracetanha-stack/ide4](https://github.com/pesaracetanha-stack/ide4)
-**نیاز به تغییر:** ندارد. مستقیم کپی کن.
-
----
 
 ```markdown
 # PROJECT CONSTITUTION — IDE Master

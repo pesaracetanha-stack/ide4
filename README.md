@@ -133,12 +133,14 @@ Detailed task lists are in [`PROJECT_CONSTITUTION.md`](./PROJECT_CONSTITUTION.md
 
 ## License
 
-This project uses a **dual-license model**:
+This project uses a **dual-license model** (accepted in [ADR-0000](./docs/decisions/0000-initial-decisions.md), Decision 1):
 
 - **AGPL-3.0** for the open-source core.
 - **Commercial license** for enterprise features.
 
-See [`LICENSE`](./LICENSE) and [`LICENSE-COMMERCIAL.md`](./LICENSE-COMMERCIAL.md) *(pending)*.
+See [`LICENSE`](./LICENSE) and [`LICENSE-COMMERCIAL.md`](./LICENSE-COMMERCIAL.md) *(pending — the legacy `license.txt` EULA will be replaced by the project owner)*.
+
+Every dependency, including vendored assets, has a written justification and license audit in [`docs/dependencies.md`](./docs/dependencies.md).
 
 ---
 
@@ -183,11 +185,12 @@ https://github.com/pesaracetanha-stack/ide4
 
 ## 📦 Technologies Used
 
-- **Programming Language**: Python 3.10+
-- **GUI Framework**: PyQt6
+- **Programming Language**: Python 3.11+
+- **GUI Framework**: PySide6 (see [ADR-0001](./docs/decisions/0001-qt-binding-pyside6.md))
 - **Database**: SQLite (For versioning and settings)
 - **Code Formatter**: autopep8
 - **Build System**: PyInstaller (For generating executables)
+- **AI Transport**: httpx (OpenAI-compatible REST, see [ADR-0000](./docs/decisions/0000-initial-decisions.md))
 
 ---
 

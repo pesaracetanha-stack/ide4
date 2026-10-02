@@ -10,7 +10,147 @@ IDE Master v4.0 is a hyper-fast, beautifully designed Integrated Development Env
 - **Hyper-Fast**: Designed with low-level optimizations for smooth execution on standard hardware.
 - **AI Integrated**: The ultimate tool for testing and debugging AI-generated code.
 - **Time-Saving**: Automates file creation, formatting, and version control.
+# IDE Master
 
+> **Your Machine. Your Model. Your Code.**
+
+An offline-first, AI-native integrated development environment for developers who want their code, models, and data to stay on their own machine.
+
+---
+
+## What This Is
+
+IDE Master is a **desktop IDE** built for the age of AI-generated code.
+
+It is **not** a competitor to VS Code, PyCharm, Cursor, or Visual Studio.  
+It is an independent home for developers who:
+
+- Refuse to send their code to a remote server.
+- Want to run their AI models locally whenever possible.
+- Value a coherent, predictable visual and structural system.
+- Want an **Agent Mode** that writes, tests, and fixes code with human approval at every step.
+
+---
+
+## Core Principles
+
+| # | Principle |
+|---|---|
+| 1 | **Offline-first** — the core works fully without internet |
+| 2 | **No vendor lock-in** — swap models, themes, and data freely |
+| 3 | **Privacy by default** — no data leaves your device without consent |
+| 4 | **Visual integrity** — every pixel comes from design tokens |
+| 5 | **Structural integrity** — every file lives in its designated layer |
+| 6 | **Agent-First** — every feature serves Agent Mode |
+| 7 | **Hardware-aware** — the app adapts to your GPU, CPU, and NPU |
+| 8 | **Docs = Product** — undocumented code is unfinished |
+| 9 | **Lightweight** — every dependency must justify itself |
+| 10 | **Testability** — every module has unit tests |
+
+---
+
+## Current Status
+
+**Phase:** A — Foundation (in progress)
+
+The project is being restructured into a coherent, professional architecture.  
+See [`PROJECT_CONSTITUTION.md`](./PROJECT_CONSTITUTION.md), Section 7 for the full phase roadmap.
+
+---
+
+## Documentation
+
+All project documentation lives in the repository, not in chat.
+
+| Document | Purpose |
+|---|---|
+| [`PROJECT_CONSTITUTION.md`](./PROJECT_CONSTITUTION.md) | The law of the project. Read this first. |
+| [`BOOTSTRAP.md`](./BOOTSTRAP.md) | Entry point for AI agents and new contributors. |
+| [`docs/architecture.md`](./docs/architecture.md) | Technical architecture detail. *(pending)* |
+| [`docs/design.md`](./docs/design.md) | Design system detail. *(pending)* |
+| [`docs/decisions/`](./docs/decisions/) | Architecture Decision Records (ADRs). *(pending)* |
+| [`docs/modules/`](./docs/modules/) | Per-module documentation. *(pending)* |
+
+---
+
+## For AI Agents
+
+If you are an AI coding agent working on this project:
+
+1. Read [`BOOTSTRAP.md`](./BOOTSTRAP.md) completely.
+2. Then read [`PROJECT_CONSTITUTION.md`](./PROJECT_CONSTITUTION.md) completely.
+3. Then use the Activation Prompt in `BOOTSTRAP.md`, Section 5.
+4. Do not write any code before completing the above.
+
+---
+
+## For Human Contributors
+
+Before opening a pull request:
+
+1. Read [`PROJECT_CONSTITUTION.md`](./PROJECT_CONSTITUTION.md).
+2. Ensure your change fits the current phase.
+3. Ensure your change respects the directory layout in Section 3.
+4. Ensure your change uses design tokens, not hardcoded values.
+5. Ensure every new module has tests.
+6. Ensure every significant decision is logged as an ADR.
+
+Pull requests that ignore the constitution will be closed without review.
+
+---
+
+## Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Language | Python 3.11+ |
+| UI Framework | PySide6 *(being finalized)* |
+| Editor Engine | Monaco or CodeMirror 6 *(planned)* |
+| Database | SQLite |
+| AI Runtime | llama.cpp, ONNX Runtime, CUDA, ROCm, Metal *(planned)* |
+| Packaging | PyInstaller *(being revisited)* |
+
+The stack is defined in [`PROJECT_CONSTITUTION.md`](./PROJECT_CONSTITUTION.md), Section 3.
+
+---
+
+## Roadmap (Priority-Driven, No Time)
+
+| Phase | Focus |
+|---|---|
+| **A** | Foundation — clean up, unify, CI, license |
+| **B** | Design System — unified visual layer |
+| **C** | Editor Core — Monaco, LSP, DAP, terminal |
+| **D** | **Agent Mode** — top priority |
+| **E** | Hardware-Aware Runtime — GPU/CPU/NPU detection |
+| **F** | Professional Features — Jupyter, remote dev, exporters |
+| **G** | Platform — Plugin SDK, marketplace |
+| **H** | Enterprise — SSO, audit, on-premise |
+
+Detailed task lists are in [`PROJECT_CONSTITUTION.md`](./PROJECT_CONSTITUTION.md), Section 7.
+
+---
+
+## License
+
+This project uses a **dual-license model**:
+
+- **AGPL-3.0** for the open-source core.
+- **Commercial license** for enterprise features.
+
+See [`LICENSE`](./LICENSE) and [`LICENSE-COMMERCIAL.md`](./LICENSE-COMMERCIAL.md) *(pending)*.
+
+---
+
+## Repository
+
+https://github.com/pesaracetanha-stack/ide4
+
+---
+
+## Tagline
+
+**"Your Machine. Your Model. Your Code."**
 ---
 
 ## ✨ Key Features

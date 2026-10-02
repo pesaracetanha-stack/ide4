@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="__LANG__" dir="__DIR_STR__">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { margin: 0; background-color: #0d1117; overflow: hidden; font-family: Tahoma, sans-serif; }
+        #graph-2d { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 2; background: #0d1117; }
+        
+        #side-panel {
+            display: none; position: absolute; __ALIGN_STR__: 0; top: 0; width: 350px; height: 100vh;
+            background: rgba(22, 27, 34, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            border-__ALIGN_OPPOSITE__: 1px solid rgba(255, 255, 255, 0.1); color: #e6edf3; padding: 25px;
+            box-sizing: border-box; z-index: 2000; direction: __DIR_STR__; text-align: __ALIGN_STR__; box-shadow: -5px 0 25px rgba(0,0,0,0.5);
+        }
+        .close-btn { position: absolute; left: 15px; top: 15px; background: #f85149; color: white; border: none; border-radius: 4px; width: 30px; height: 30px; font-weight: bold; cursor: pointer; z-index: 2001; }
+        
+        #nav-toolbar {
+            position: absolute; bottom: 20px; right: 20px; z-index: 1000;
+            display: flex; gap: 8px; background: rgba(22, 27, 34, 0.85);
+            padding: 10px; border-radius: 8px; border: 1px solid #30363d;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        }
+        .nav-btn {
+            background: #21262d; border: 1px solid #30363d; color: #e6edf3;
+            width: 36px; height: 36px; border-radius: 4px; cursor: pointer;
+            font-size: 16px; display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s;
+        }
+        .nav-btn:hover { background: #30363d; }
+        
+        #minimap-container {
+            position: absolute; bottom: 20px; left: 20px; z-index: 1000;
+            width: 150px; height: 150px; background: rgba(13, 17, 23, 0.85);
+            border: 1px solid #30363d; border-radius: 8px; 
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            display: flex; flex-direction: column; pointer-events: none;
+        }
+        #minimap-title { font-size: 10px; color: #8b949e; text-align: center; padding: 4px; border-bottom: 1px solid #30363d;}
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #58a6ff; }
+
+        /* Context Menu Styles */
+        #context-menu {
+            display: none; position: absolute; z-index: 3000;
+            background: rgba(22, 27, 34, 0.95); border: 1px solid #30363d;
+            border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+            padding: 6px 0; font-family: Tahoma, sans-serif; font-size: 12px;
+            color: #e6edf3; min-width: 180px; backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px); direction: __DIR_STR__;
+        }
+        .menu-item { 
+            padding: 10px 16px; cursor: pointer; transition: all 0.2s; 
+            display: flex; align-items: center; gap: 10px; 
+        }
+        .menu-item:hover { background: #1f6feb; color: white; }
+        .menu-item.danger:hover { background: #da3633; color: white; }
+        .menu-divider { height: 1px; background: #30363d; margin: 4px 0; }
+    </style>
+    <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+    <script type="text/javascript" src="__VIS_JS_PATH__"></script>
+</head>
+<body oncontextmenu="return false;"> <!-- Disable default browser right-click -->
+
+    <div id="graph-2d"></div>
+    
+    <div id="side-panel">
+        <button class="close-btn" onclick="resetFocusAndClose()">X</button>
+        <div id="panel-content" style="margin-top: 20px;"></div>
+    </div>
+    
+    <div id="minimap-container">
+        <div id="minimap-title">__MAP_TITLE__</div>
+        <canvas id="minimap-canvas" width="148" height="130"></canvas>
+    </div>
+    
+    <div id="nav-toolbar">
+        <button class="nav-btn" onclick="navZoomIn()" title="Zoom In">➕</button>
+        <button class="nav-btn" onclick="navZoomOut()" title="Zoom Out">➖</button>
+        <button class="nav-btn" onclick="navFit()" title="Fit to Screen / Reset View">🎯</button>
+    </div>
+
+    <!-- Context Menu Structure -->
+    <div id="context-menu">
+        <div class="menu-item" onclick="ctxMenuAction('open')"><span>📝</span> <span id="ctx-open">Open in Editor</span></div>
+        <div class="menu-item" onclick="ctxMenuAction('focus')"><span>🔍</span> <span id="ctx-focus">Focus on File</span></div>
+        <div class="menu-item danger" onclick="ctxMenuAction('impact')"><span>💣</span> <span id="ctx-impact">Analyze Impact</span></div>
+        <div class="menu-divider" id="ctx-divider"></div>
+        <div class="menu-item" onclick="ctxMenuAction('extract')"><span>📦</span> <span id="ctx-extract">Extract Module</span></div>
+        <div class="menu-item" id="ctx-reset-item" onclick="ctxMenuAction('reset')" style="display:none;"><span>👁️</span> <span id="ctx-reset">Reset View</span></div>
+    </div>
+
+    <script>
+        // Context menu localization
+        document.addEventListener('DOMContentLoaded', () => {
+            const isFa = document.documentElement.lang === 'fa';
+            if (isFa) {
+                document.getElementById('ctx-open').innerText = 'Open in Editor';
+                document.getElementById('ctx-focus').innerText = 'Focus on File';
+                document.getElementById('ctx-impact').innerText = 'Analyze Impact';
+                document.getElementById('ctx-extract').innerText = 'Extract Module';
+                document.getElementById('ctx-reset').innerText = 'Reset View';
+            }
+        });
+
+        var bridge = null;
+        function initQtWebChannel() {
+            if (typeof qt !== 'undefined' && typeof QWebChannel !== 'undefined') {
+                new QWebChannel(qt.webChannelTransport, function(channel) { bridge = channel.objects.bridge; });
+            } else {
+                setTimeout(initQtWebChannel, 100);
+            }
+        }
+        initQtWebChannel();
+
+        window.saveRelatedFiles = function(nodeId) { if (bridge) bridge.save_related_files(nodeId); };
+        window.openInEditor = function(nodeId) { if (bridge) bridge.open_in_editor(nodeId); };
+
+        let gNodes = [];
+        let gLinks = [];
+        let currentExts = [];
+        let selectedNodeId = null;
+
+        let nodes2D = null;
+        let edges2D = null;
+        let network = null;
+        
+        let contextNodeId = null;
+        let ctxMenu = document.getElementById('context-menu');
+
+        window.updateGraphData = function(nodes, links, exts) {
+            if (typeof vis === 'undefined') {
+                document.getElementById('graph-2d').innerHTML = "<h3 style='color:#f85149; text-align:center; margin-top:100px; font-family: Tahoma;'>⚠️ Offline Error: vis.js library failed to load.</h3>";
+                return;
+            }
+
+            gNodes = nodes;
+            gLinks = links;
+            currentExts = exts;
+
+            if (!network) {
+                nodes2D = new vis.DataSet();
+                edges2D = new vis.DataSet();
+                var container = document.getElementById('graph-2d');
+                var data = { nodes: nodes2D, edges: edges2D };
+                var options = {
+                    nodes: { 
+                        font: { size: 14, face: "Tahoma", color: "#e6edf3", strokeWidth: 2, strokeColor: "#0d1117" }, 
+                        borderWidth: 0,
+                        shadow: { enabled: true, color: 'rgba(0,0,0,0.8)', size: 5, x: 2, y: 2 }
+                    },
+                    edges: { 
+                        smooth: false, 
+                        arrows: { to: { enabled: true, scaleFactor: 0.8 } } 
+                    },
+                    physics: { 
+                        enabled: true,
+                        solver: 'forceAtlas2Based',
+                        forceAtlas2Based: {
+                            gravitationalConstant: -80,
+                            centralGravity: 0.01,
+                            springLength: 120,
+                            springConstant: 0.02,
+                            damping: 0.9,
+                            avoidOverlap: 1 
+                        },
+                        stabilization: { iterations: 200 } 
+                    }, 
+                    interaction: { hover: true, dragNodes: true, navigationButtons: false }
+                };
+                
+                network = new vis.Network(container, data, options);
+
+                network.on("stabilizationIterationsDone", function () {
+                    network.setOptions({ physics: false });
+                });
+
+                network.on("click", function (params) {
+                    ctxMenu.style.display = 'none'; // Hide menu on left click
+                    if (params.nodes.length > 0) {
+                        let clickedId = params.nodes[0];
+                        selectedNodeId = clickedId;
+                        applyFocusEffect(clickedId);
+
+                        var node = nodes2D.get(clickedId);
+                        document.getElementById('side-panel').style.display = 'block';
+                        document.getElementById('panel-content').innerHTML = node.panelContent;
+                    } else {
+                        resetFocusAndClose();
+                    }
+                });
+
+                network.on("dragStart", function () { ctxMenu.style.display = 'none'; });
+                network.on("zoom", function () { ctxMenu.style.display = 'none'; });
+
+                // 🟢 Right-click context menu event on the graph
+                network.on("oncontext", function (params) {
+                    params.event.preventDefault();
+                    let nodeId = network.getNodeAt(params.pointer.DOM);
+                    
+                    if (nodeId) {
+                        // Right-click on a file
+                        contextNodeId = nodeId;
+                        document.getElementById('ctx-reset-item').style.display = 'none';
+                        document.querySelectorAll('.menu-item:not(#ctx-reset-item)').forEach(el => el.style.display = 'flex');
+                        document.getElementById('ctx-divider').style.display = 'block';
+                        network.selectNodes([nodeId]);
+                    } else {
+                        // Right-click on empty space
+                        contextNodeId = null;
+                        document.querySelectorAll('.menu-item').forEach(el => el.style.display = 'none');
+                        document.getElementById('ctx-divider').style.display = 'none';
+                        document.getElementById('ctx-reset-item').style.display = 'flex';
+                    }
+                    
+                    ctxMenu.style.display = 'block';
+                    
+                    // Prevent the menu from going out of bounds
+                    let menuWidth = ctxMenu.offsetWidth;
+                    let menuHeight = ctxMenu.offsetHeight;
+                    let x = params.event.clientX;
+                    let y = params.event.clientY;
+                    
+                    if (x + menuWidth > window.innerWidth) x -= menuWidth;
+                    if (y + menuHeight > window.innerHeight) y -= menuHeight;
+                    
+                    ctxMenu.style.left = x + 'px';
+                    ctxMenu.style.top = y + 'px';
+                });
+            }
+
+            gLinks.forEach(l => {
+                l.source = gNodes.find(n => n.id === (typeof l.source === 'object' ? l.source.id : l.source));
+                l.target = gNodes.find(n => n.id === (typeof l.target === 'object' ? l.target.id : l.target));
+            });
+
+            var visNodesData = gNodes.map(n => ({ 
+                id: n.id, label: n.name, shape: 'image', image: n.svgIcon, 
+                size: n.size2d, panelContent: n.panelContent, hidden: !currentExts.includes(n.ext),
+                originalColor: n.color
+            }));
+            
+            var visEdgesData = gLinks.map(l => ({ 
+                id: l.source.id + "_" + l.target.id,
+                from: l.source.id || l.source, to: l.target.id || l.target, 
+                color: l.is_cycle ? {color: '#f85149', highlight: '#f85149'} : { color: '#484f58', opacity: 0.6 },
+                width: l.is_cycle ? 4 : 2
+            }));
+
+            nodes2D.clear();
+            edges2D.clear();
+            nodes2D.add(visNodesData);
+            edges2D.add(visEdgesData);
+            network.setOptions({ physics: true });
+        };
+
+        // Apply menu click logic
+        window.ctxMenuAction = function(action) {
+            ctxMenu.style.display = 'none';
+            if (action === 'open' && contextNodeId) window.openInEditor(contextNodeId);
+            if (action === 'focus' && contextNodeId) {
+                network.focus(contextNodeId, { scale: 1.2, animation: true });
+                applyFocusEffect(contextNodeId);
+                let node = nodes2D.get(contextNodeId);
+                document.getElementById('side-panel').style.display = 'block';
+                document.getElementById('panel-content').innerHTML = node.panelContent;
+            }
+            if (action === 'impact' && contextNodeId) window.showImpact(contextNodeId);
+            if (action === 'extract' && contextNodeId) window.saveRelatedFiles(contextNodeId);
+            if (action === 'reset') window.resetFocusAndClose();
+        };
+
+        function applyFocusEffect(nodeId) {
+            let connectedNodes = new Set([nodeId]);
+            let connectedEdges = new Set();
+
+            gLinks.forEach(l => {
+                let src = typeof l.source === 'object' ? l.source.id : l.source;
+                let tgt = typeof l.target === 'object' ? l.target.id : l.target;
+                if (src === nodeId || tgt === nodeId) {
+                    connectedNodes.add(src);
+                    connectedNodes.add(tgt);
+                    connectedEdges.add(l.source.id + "_" + l.target.id);
+                }
+            });
+
+            let nodeUpdates = [];
+            gNodes.forEach(n => {
+                let isVisible = currentExts.includes(n.ext);
+                if (!isVisible) return;
+
+                if (connectedNodes.has(n.id)) {
+                    nodeUpdates.push({ id: n.id, opacity: 1.0, font: { color: "#e6edf3" } });
+                } else {
+                    nodeUpdates.push({ id: n.id, opacity: 0.15, font: { color: "rgba(230, 237, 243, 0.15)" } });
+                }
+            });
+            nodes2D.update(nodeUpdates);
+
+            let allEdges = edges2D.get();
+            let edgeUpdates = allEdges.map(e => {
+                if (connectedEdges.has(e.id)) {
+                    let isCycle = false;
+                    gLinks.forEach(l => {
+                        if (l.source.id + "_" + l.target.id === e.id && l.is_cycle) isCycle = true;
+                    });
+                    return { id: e.id, color: isCycle ? {color: '#f85149', opacity: 1.0} : { color: '#58a6ff', opacity: 1.0 }, width: 3 };
+                } else {
+                    return { id: e.id, color: { color: '#30363d', opacity: 0.05 }, width: 1 };
+                }
+            });
+            edges2D.update(edgeUpdates);
+        }
+
+        window.resetFocusAndClose = function() {
+            selectedNodeId = null;
+            document.getElementById('side-panel').style.display = 'none';
+            if (!nodes2D) return;
+
+            let nodeUpdates = [];
+            gNodes.forEach(n => { nodeUpdates.push({ id: n.id, opacity: 1.0, font: { color: "#e6edf3" } }); });
+            nodes2D.update(nodeUpdates);
+
+            let allEdges = edges2D.get();
+            let edgeUpdates = allEdges.map(e => {
+                let isCycle = false;
+                gLinks.forEach(l => {
+                    if (l.source.id + "_" + l.target.id === e.id && l.is_cycle) isCycle = true;
+                });
+                return { id: e.id, color: isCycle ? {color: '#f85149', highlight: '#f85149'} : { color: '#484f58', opacity: 0.6 }, width: isCycle ? 4 : 2 };
+            });
+            edges2D.update(edgeUpdates);
+        };
+
+        window.showImpact = function(nodeId) {
+            if (!nodes2D) return;
+            focusNodeId = nodeId; window.neighbors.clear(); window.neighbors.add(nodeId); window.impactMode = true;
+            gLinks.forEach(l => {
+                let src = typeof l.source === 'object' ? l.source.id : l.source;
+                let tgt = typeof l.target === 'object' ? l.target.id : l.target;
+                if (tgt === nodeId) window.neighbors.add(src);
+            });
+            
+            let isNodeVisible = (n) => {
+                if (!currentExts.includes(n.ext)) return false;
+                return true; 
+            };
+
+            let nodeUpdates = [];
+            gNodes.forEach(n => { nodeUpdates.push({ id: n.id, hidden: !isNodeVisible(n) }); });
+            nodes2D.update(nodeUpdates);
+
+            nodeUpdates = [];
+            gNodes.forEach(n => {
+                if(window.neighbors.has(n.id)) {
+                    let c = (n.id === nodeId) ? '#f1c40f' : '#f85149';
+                    nodeUpdates.push({ id: n.id, color: { background: c, border: c }, opacity: 1.0 });
+                } else {
+                    nodeUpdates.push({ id: n.id, opacity: 0.15 });
+                }
+            });
+            nodes2D.update(nodeUpdates);
+            document.getElementById('side-panel').style.display = 'none';
+        };
+
+        window.filterNodes = function(extString) { 
+            currentExts = extString ? extString.split(',') : []; 
+            if (!nodes2D) return;
+            let nodeUpdates = [];
+            gNodes.forEach(n => { nodeUpdates.push({ id: n.id, hidden: !currentExts.includes(n.ext) }); });
+            nodes2D.update(nodeUpdates);
+        };
+
+        window.navZoomIn = function() { if(network) network.moveTo({ scale: network.getScale() * 1.5, animation: true }); };
+        window.navZoomOut = function() { if(network) network.moveTo({ scale: network.getScale() / 1.5, animation: true }); };
+        window.navFit = function() { if(network) network.fit({ animation: true }); };
+
+        window.searchNode = function(query) {
+            if (!nodes2D || !network) return;
+            query = query.toLowerCase();
+            const node = gNodes.find(n => n.name.toLowerCase().includes(query));
+            if (node) { 
+                network.focus(node.id, { scale: 1.5, animation: true }); 
+                applyFocusEffect(node.id);
+                document.getElementById('side-panel').style.display = 'block'; 
+                document.getElementById('panel-content').innerHTML = node.panelContent; 
+            }
+        };
+
+        const radarCanvas = document.getElementById('minimap-canvas');
+        const ctx = radarCanvas.getContext('2d');
+        function drawRadar() {
+            if (!ctx || !network || typeof vis === 'undefined') return;
+            ctx.clearRect(0, 0, 150, 150);
+            let pos = network.getPositions();
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            for(let id in pos) {
+                let p = pos[id];
+                if(p.x < minX) minX = p.x; if(p.x > maxX) maxX = p.x;
+                if(p.y < minY) minY = p.y; if(p.y > maxY) maxY = p.y;
+            }
+            let rangeX = Math.max(maxX - minX, 1); let rangeY = Math.max(maxY - minY, 1);
+            let maxRange = Math.max(rangeX, rangeY);
+            
+            for(let id in pos) {
+                let n = gNodes.find(nd => nd.id == id);
+                if(n && !currentExts.includes(n.ext)) continue;
+                let p = pos[id];
+                let nx = ((p.x - minX) / maxRange) * 140 + 5;
+                let ny = ((p.y - minY) / maxRange) * 140 + 5;
+                ctx.fillStyle = n ? n.color : 'white';
+                ctx.beginPath(); ctx.arc(nx, ny, 2, 0, 2*Math.PI); ctx.fill();
+            }
+            requestAnimationFrame(drawRadar);
+        }
+        
+        setTimeout(() => { if(typeof vis !== 'undefined') drawRadar(); }, 1000);
+    </script>
+</body>
+</html>
